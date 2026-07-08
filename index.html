@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>~/portafolio — sistema de cámaras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Black+Ops+One&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030303;
+    --amber: #3ee06a;
+    --amber-dim: #1f7a3d;
+    --red: #ff3b3b;
+    --text: #d8d5cc;
+    --muted: #6b6b6b;
+    --line: #232323;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  /* ---------- el monitor completo ---------- */
+  .monitor {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    overflow: hidden;
+  }
+
+  /* scanlines permanentes */
+  .monitor::before {
+    content: "";
+    position: absolute; inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+  }
+  /* viñeta oscura tipo cámara de seguridad */
+  .monitor::after {
+    content: "";
+    position: absolute; inset: 0;
+    z-index: 49;
+    pointer-events: none;
+    box-shadow: inset 0 0 160px 60px rgba(0,0,0,0.85);
+  }
+
+  /* ---------- overlay de encabezado tipo cámara ---------- */
+  .cam-hud {
+    position: absolute; top: 18px; left: 22px; right: 22px;
+    z-index: 60;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    font-size: 0.8rem;
+    pointer-events: none;
+  }
+  .cam-id { color: var(--amber); }
+  .cam-id .label { color: var(--muted); display: block; font-size: 0.65rem; margin-top: 2px; }
+  .rec {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--red);
+  }
+  .rec .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--red);
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.15; } }
+
+  .cam-clock { color: var(--muted); font-size: 0.7rem; position: absolute; bottom: 96px; right: 22px; z-index: 60; }
+
+  /* ---------- feeds (secciones) ---------- */
+  .feed {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 8vw 120px;
+    text-align: center;
+    overflow-y: auto;
+  }
+  .feed.active { display: flex; }
+
+  /* -- CAM 01: presentación -- */
+  .feed[data-cam="presentacion"] { overflow: hidden; }
+
+  .cam-bg-video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    filter: saturate(1.05) contrast(1.05);
+  }
+  .cam-bg-overlay {
+    position: absolute; inset: 0;
+    z-index: 0;
+    background: radial-gradient(ellipse 60% 50% at center, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.15) 55%, transparent 75%);
+  }
+  .cam-bg-loading {
+    position: absolute; inset: 0;
+    z-index: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--amber-dim);
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* el nombre y su descripción se centran juntos, de forma natural */
+  .name-center {
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 26px;
+  }
+
+  .presentacion-sub {
+    z-index: 1;
+    text-align: center;
+    padding: 0 8vw;
+  }
+  .presentacion-sub .role-line,
+  .presentacion-sub .bio-line {
+    text-shadow: 0 0 16px rgba(0,0,0,0.9), 0 0 32px rgba(0,0,0,0.9);
+  }
+
+  /* ---------- nombre: solo efecto de máquina de escribir ---------- */
+  .name-stencil {
+    font-family: 'Black Ops One', 'JetBrains Mono', monospace;
+    font-size: clamp(1.4rem, 6.5vw, 3.6rem);
+    letter-spacing: 0.03em;
+    color: var(--amber);
+    text-shadow: 0 0 18px rgba(62,224,106,0.55), 0 0 40px rgba(0,0,0,0.9);
+    white-space: nowrap;
+  }
+  .name-stencil .letter {
+    position: relative;
+    display: inline-block;
+  }
+  .name-stencil .letter.space { width: 0.5em; }
+
+  .type-cursor {
+    display: inline-block;
+    width: 0.5em;
+    height: 1em;
+    background: var(--amber);
+    margin-left: 2px;
+    vertical-align: -0.12em;
+    animation: blink 0.85s steps(1) infinite;
+  }
+
+  .real-name {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .real-name-evin {
+    color: inherit; /* se ve igual que el resto del nombre, normal y visible */
+    transition: color 0.4s ease, text-shadow 0.4s ease;
+  }
+  .real-name-evin.lit {
+    color: #3ee06a;
+    text-shadow: 0 0 14px rgba(62,224,106,0.9), 0 0 34px rgba(62,224,106,0.5);
+  }
+
+  .role-line { margin-top: 20px; color: var(--muted); font-size: 1rem; }
+  .role-line .amber { color: var(--amber); }
+  .role-stencil, .bio-stencil {
+    position: relative;
+  }
+  .role-stencil { color: var(--text); font-weight: 600; }
+  .role-stencil .letter, .bio-stencil .letter {
+    position: relative;
+    display: inline-block;
+  }
+  .role-stencil .letter.space, .bio-stencil .letter.space { display: inline; }
+  .role-stencil .word-wrap, .bio-stencil .word-wrap { display: inline-block; white-space: nowrap; }
+  .role-stencil .redact-block, .bio-stencil .redact-block {
+    position: absolute;
+    top: -8%; left: -3%;
+    width: 0%;
+    height: 118%;
+    background: #0a0a0a;
+    transition: width 0.22s ease-out;
+    pointer-events: none;
+  }
+  .role-stencil .redact-block.covered, .bio-stencil .redact-block.covered { width: 106%; }
+  .role-stencil .letter.kept, .bio-stencil .letter.kept { color: var(--amber); font-weight: 700; }
+  .bio-line { margin-top: 14px; max-width: 480px; color: var(--muted); font-size: 0.85rem; margin-left: auto; margin-right: auto; }
+  .bio-line .amber { color: var(--amber); }
+  .cursor-blink {
+    display: inline-block; width: 9px; height: 1.1em; background: var(--amber);
+    margin-left: 4px; vertical-align: text-bottom; animation: blink 1s steps(1) infinite;
+  }
+
+  /* -- ítem "Más" / álbum general -- */
+  .work-item.more-item .work-title { color: var(--amber-dim); }
+  .work-item.more-item:hover .work-title { color: var(--amber); }
+  .more-panel {
+    display: none;
+    width: 100%;
+    max-width: 560px;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 8px;
+    margin: 4px auto 20px;
+  }
+  .more-panel.open { display: grid; }
+  .more-thumb {
+    aspect-ratio: 1;
+    background-size: cover;
+    background-position: center;
+    border: 1px solid var(--line);
+    opacity: 0.55;
+    filter: grayscale(0.4);
+    transition: opacity 0.2s ease;
+  }
+  .more-thumb:hover { opacity: 1; filter: grayscale(0); }
+  .more-thumb.pending {
+    display: flex; align-items: center; justify-content: center;
+    background-image: none !important;
+    color: var(--amber-dim);
+    font-size: 0.55rem;
+    letter-spacing: 0.04em;
+  }
+
+  /* -- ítems sin material propio todavía -- */
+  .work-item.pending .work-title { color: var(--muted); font-style: italic; }
+  .preview .pending-label {
+    display: none;
+    width: 100%; height: 100%;
+    align-items: center; justify-content: center;
+    color: var(--amber);
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+  }
+
+  /* ---------- lightbox: vista ampliada con tamaño y sonido originales ---------- */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.94);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 6vh 5vw;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox-inner img, .lightbox-inner video {
+    max-width: 90vw; max-height: 86vh;
+    width: auto; height: auto;
+    box-shadow: 0 0 50px rgba(0,0,0,0.9);
+    border: 1px solid var(--line);
+  }
+  .lightbox-inner .pending-label {
+    color: var(--amber);
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+  }
+  .lightbox-close {
+    position: absolute; top: 22px; right: 26px;
+    width: 40px; height: 40px;
+    background: #0a0a0a;
+    border: 1px solid var(--amber-dim);
+    color: var(--amber);
+    font-size: 1.1rem;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .lightbox-close:hover { border-color: var(--amber); }
+  .lightbox-caption {
+    position: absolute; bottom: 26px; left: 0; right: 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+  }
+
+  /* -- CAM 02/03/04: listas de trabajo -- */
+  .feed-title { font-size: 1.4rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); margin-bottom: 30px; }
+  .feed-title .amber { color: var(--amber); }
+
+  .work-list { list-style: none; width: 100%; max-width: 560px; text-align: left; }
+  .work-item {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 20px;
+    padding: 18px 6px; border-bottom: 1px solid var(--line); cursor: pointer;
+    transition: opacity 0.3s ease;
+  }
+  .work-item:first-child { border-top: 1px solid var(--line); }
+  .work-item:hover .work-title { color: var(--amber); }
+  .work-list:hover .work-item:not(:hover) { opacity: 0.3; }
+  .work-title { font-size: 1.05rem; }
+  .work-meta { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+
+  /* -- CAM 05: contacto -- */
+  .contact-line { font-size: 1rem; margin-top: 10px; }
+  .contact-line .amber { color: var(--amber); }
+  .contact-line a:hover { color: var(--amber); }
+
+  /* ---------- visor flotante para hover ---------- */
+  .preview {
+    position: fixed; top: 0; left: 0; width: 260px; height: 165px;
+    pointer-events: none; opacity: 0; transform: scale(0.92);
+    transition: opacity 0.2s ease, transform 0.2s ease; z-index: 70;
+    border: 1px solid var(--amber-dim); overflow: hidden; background: #000;
+  }
+  .preview.active { opacity: 1; transform: scale(1); }
+  .preview img, .preview video { width: 100%; height: 100%; object-fit: cover; filter: grayscale(0.15) contrast(1.05); }
+
+  /* ---------- estática al cambiar de cámara ---------- */
+  .static-overlay {
+    position: absolute; inset: 0; z-index: 80;
+    background: repeating-linear-gradient(0deg, #fff 0px, #fff 1px, #000 1px, #000 2px);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .static-overlay.on {
+    opacity: 1;
+    animation: staticFlicker 0.32s steps(2) forwards;
+  }
+  @keyframes staticFlicker {
+    0% { opacity: 1; transform: translateY(0); }
+    20% { opacity: 0.9; transform: translateY(-4px); }
+    40% { opacity: 1; transform: translateY(3px); }
+    60% { opacity: 0.85; transform: translateY(-2px); }
+    80% { opacity: 1; transform: translateY(1px); }
+    100% { opacity: 0; transform: translateY(0); }
+  }
+
+  /* ---------- barra de selección de cámaras (estilo tablet FNAF) ---------- */
+  .cam-bar {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 90;
+    background: #0a0a0a;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 14px 16px;
+    flex-wrap: wrap;
+  }
+  .cam-btn {
+    background: #111;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    padding: 9px 14px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    transition: all 0.15s ease;
+  }
+  .cam-btn .num { color: var(--amber-dim); font-size: 0.6rem; }
+  .cam-btn:hover { border-color: var(--amber-dim); color: var(--text); }
+  .cam-btn.selected { border-color: var(--amber); color: var(--amber); background: #0b1f10; }
+  .cam-btn.selected .num { color: var(--amber); }
+
+  @media (max-width: 640px) {
+    .cam-bar { gap: 2px; padding: 10px; }
+    .cam-btn { padding: 7px 8px; font-size: 0.6rem; }
+    .work-item { flex-direction: column; align-items: flex-start; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="monitor" id="monitor">
+
+    <div class="cam-hud">
+      <div class="cam-id">
+        CAM <span id="camNumber">01</span>
+        <span class="label" id="camLabel">PRESENTACIÓN</span>
+      </div>
+      <div class="rec"><span class="dot"></span>REC</div>
+    </div>
+
+    <div class="cam-clock" id="camClock">00:00:00</div>
+    <audio id="camSwitchSound" src="media/cam-switch.mp3" preload="auto"></audio>
+
+    <!-- CAM 01 — PRESENTACIÓN -->
+    <div class="feed active" data-cam="presentacion">
+      <video class="cam-bg-video" id="camBgVideo" src="media/cam01.mp4" autoplay muted loop playsinline></video>
+      <div class="cam-bg-overlay"></div>
+      <div class="cam-bg-loading" id="camBgLoading">Cargando…</div>
+
+      <div class="name-center">
+        <div>
+          <div class="name-stencil" id="nameStencil"></div>
+          <div class="real-name"><span class="real-name-evin" id="realNameEvin">Evin</span> Damián Sereno Martínez</div>
+        </div>
+      </div>
+
+      <div class="presentacion-sub">
+        <div class="role-line"><span class="amber">&gt;</span> director de fotografía / filmmaker · content creator</div>
+        <div class="bio-line"><span class="bio-stencil" id="bioStencil"></span></div>
+      </div>
+    </div>
+
+    <!-- CAM 02 — VIDEO -->
+    <div class="feed" data-cam="video">
+      <div class="feed-title"><span class="amber">02</span> · Videos</div>
+      <ul class="work-list">
+        <li class="work-item pending" data-pending="true">
+          <span class="work-title">Reel — Marca Local</span><span class="work-meta">Comercial</span>
+        </li>
+        <li class="work-item pending" data-pending="true">
+          <span class="work-title">Videoclip — "Nombre canción"</span><span class="work-meta">Música</span>
+        </li>
+        <li class="work-item" data-type="video" data-src="media/NEXTLEVEL.mp4">
+          <span class="work-title">Video IA</span><span class="work-meta">IA</span>
+        </li>
+        <li class="work-item more-item" data-more="more-video">
+          <span class="work-title">Más</span>
+        </li>
+      </ul>
+      <div class="more-panel" id="more-video">
+        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb pending">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- CAM 03 — DRONES -->
+    <div class="feed" data-cam="drones">
+      <div class="feed-title"><span class="amber">03</span> · Drones</div>
+      <ul class="work-list">
+        <li class="work-item" data-type="video" data-src="media/terreno_mulege.mp4">
+          <span class="work-title">Toma aérea — Costa</span><span class="work-meta">Aéreo</span>
+        </li>
+        <li class="work-item" data-type="video" data-src="media/CAMPOS_DE_BASE.mp4">
+          <span class="work-title">Seguimiento — Evento deportivo</span><span class="work-meta">Aéreo</span>
+        </li>
+        <li class="work-item" data-type="video" data-src="media/Timelapse_Tijuana_Evento_Calle_sexta.mp4">
+          <span class="work-title">Eventos Tijuana</span><span class="work-meta">Timelapse</span>
+        </li>
+        <li class="work-item more-item" data-more="more-drones">
+          <span class="work-title">Más</span>
+        </li>
+      </ul>
+      <div class="more-panel" id="more-drones">
+        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb pending">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- CAM 04 — FOTOGRAFÍA -->
+    <div class="feed" data-cam="fotografia">
+      <div class="feed-title"><span class="amber">04</span> · Fotografía</div>
+      <ul class="work-list">
+        <li class="work-item" data-type="img" data-src="media/BODA.jpg">
+          <span class="work-title">Boda — Ceremonia</span><span class="work-meta">Boda</span>
+        </li>
+        <li class="work-item" data-type="img" data-src="media/gym.jpg">
+          <span class="work-title">Fitness — Sesión de Gimnasio</span><span class="work-meta">Fitness</span>
+        </li>
+        <li class="work-item" data-type="img" data-src="media/RETRATO.jpg">
+          <span class="work-title">Retrato — Atardecer en la Playa</span><span class="work-meta">Retrato</span>
+        </li>
+        <li class="work-item more-item" data-more="more-foto">
+          <span class="work-title">Más</span>
+        </li>
+      </ul>
+      <div class="more-panel" id="more-foto">
+        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb pending">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- CAM 05 — CONTACTO -->
+    <div class="feed" data-cam="contacto">
+      <div class="feed-title"><span class="amber">05</span> · Contacto</div>
+      <div class="contact-line"><a href="mailto:sereno.evin@uabc.edu.mx"><span class="amber">email</span> → sereno.evin@uabc.edu.mx</a></div>
+      <div class="contact-line"><a href="https://www.linkedin.com/in/Evin-mkt-digital" target="_blank" rel="noopener"><span class="amber">linkedin</span> → /in/Evin-mkt-digital</a></div>
+      <div class="contact-line"><a href="tel:+526631036418"><span class="amber">whatsapp</span> → 663 103 6418</a></div>
+      <div class="contact-line"><a href="media/CV_Evin_Sereno.pdf" target="_blank"><span class="amber">CV</span> → descargar PDF</a></div>
+    </div>
+
+    <div class="static-overlay" id="staticOverlay"></div>
+
+    <div class="cam-bar">
+      <button class="cam-btn selected" data-cam="presentacion"><span class="num">CAM 01</span>PRESENTACIÓN</button>
+      <button class="cam-btn" data-cam="video"><span class="num">CAM 02</span>VIDEO</button>
+      <button class="cam-btn" data-cam="drones"><span class="num">CAM 03</span>DRONES</button>
+      <button class="cam-btn" data-cam="fotografia"><span class="num">CAM 04</span>FOTOGRAFÍA</button>
+      <button class="cam-btn" data-cam="contacto"><span class="num">CAM 05</span>CONTACTO</button>
+    </div>
+
+  </div>
+
+  <div class="preview" id="preview">
+    <img id="previewImg" src="" alt="" style="display:none;">
+    <video id="previewVideo" muted loop autoplay playsinline style="display:none;"></video>
+    <div class="pending-label" id="previewPending">Cargando…</div>
+  </div>
+
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" id="lightboxClose">✕</button>
+    <div class="lightbox-inner" id="lightboxInner"></div>
+    <div class="lightbox-caption" id="lightboxCaption"></div>
+  </div>
+
+  <script>
+    // (el fondo ASCII fue reemplazado por el video de CAM 01 — media/cam01.mp4)
+
+    // ---------- video de fondo de CAM 01: mostrar "Cargando..." hasta que arranque ----------
+    (function () {
+      const bgVideo = document.getElementById('camBgVideo');
+      const bgLoading = document.getElementById('camBgLoading');
+      const hide = () => { bgLoading.style.display = 'none'; };
+      bgVideo.addEventListener('playing', hide);
+      bgVideo.addEventListener('canplay', hide);
+      bgVideo.addEventListener('error', () => { bgLoading.textContent = 'Cargando…'; });
+      const p = bgVideo.play();
+      if (p) p.catch(() => { /* se reintenta solo al interactuar con la página */ });
+      document.addEventListener('click', () => { if (bgVideo.paused) bgVideo.play().catch(()=>{}); }, { once: true });
+    })();
+
+    // ---------- nombre: solo máquina de escribir (sin ocultarlo) ----------
+    (function () {
+      const NAME = 'ABSOLEM';
+      const el = document.getElementById('nameStencil');
+      const typeSpeed = 95; // ms por letra
+
+      const letters = NAME.split('').map(ch => {
+        const letter = document.createElement('span');
+        letter.className = 'letter' + (ch === ' ' ? ' space' : '');
+        if (ch !== ' ') letter.textContent = ch;
+        letter.style.visibility = 'hidden';
+        el.appendChild(letter);
+        return letter;
+      });
+
+      const cursor = document.createElement('span');
+      cursor.className = 'type-cursor';
+      el.appendChild(cursor);
+
+      let i = 0;
+      function typeNext() {
+        if (i < letters.length) {
+          letters[i].style.visibility = 'visible';
+          el.insertBefore(cursor, letters[i].nextSibling);
+          i++;
+          setTimeout(typeNext, typeSpeed);
+        } else {
+          cursor.remove(); // termina de escribir y se queda así, sin ocultarse
+        }
+      }
+      typeNext();
+    })();
+
+    // ---------- texto pequeño: se escribe y luego se redacta, dejando solo E, V, I, N ----------
+    function runTypeRedact(elId, text, onDone) {
+      const KEEP = ['e', 'v', 'i', 'n'];
+      const el = document.getElementById(elId);
+      const typeSpeed = 60;        // ms por letra
+      const holdAfterType = 6000;  // 6s mostrando el texto completo, sin resaltar nada, para que dé tiempo a leer
+      const redactStagger = 65;    // ms entre cada letra que se ilumina/redacta
+
+      function normalize(ch) {
+        return ch.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      }
+
+      // se separan palabras y espacios: cada palabra se envuelve en un bloque que nunca se parte a la mitad
+      const tokens = text.match(/\S+|\s+/g) || [];
+      const letters = [];
+      tokens.forEach(token => {
+        if (/^\s+$/.test(token)) {
+          Array.from(token).forEach(() => {
+            const spaceLetter = document.createElement('span');
+            spaceLetter.className = 'letter space';
+            spaceLetter.textContent = ' ';
+            spaceLetter.style.visibility = 'hidden';
+            el.appendChild(spaceLetter);
+            letters.push(spaceLetter);
+          });
+        } else {
+          const wordWrap = document.createElement('span');
+          wordWrap.className = 'word-wrap';
+          el.appendChild(wordWrap);
+          Array.from(token).forEach(ch => {
+            const letter = document.createElement('span');
+            letter.className = 'letter';
+            letter.textContent = ch;
+            if (!KEEP.includes(normalize(ch))) {
+              const block = document.createElement('span');
+              block.className = 'redact-block';
+              letter.appendChild(block);
+            } else {
+              letter.dataset.keep = 'true';
+            }
+            letter.style.visibility = 'hidden';
+            wordWrap.appendChild(letter);
+            letters.push(letter);
+          });
+        }
+      });
+
+      const cursor = document.createElement('span');
+      cursor.className = 'type-cursor';
+      el.appendChild(cursor);
+
+      let i = 0;
+      function typeNext() {
+        if (i < letters.length) {
+          letters[i].style.visibility = 'visible';
+          letters[i].parentNode.insertBefore(cursor, letters[i].nextSibling);
+          i++;
+          setTimeout(typeNext, typeSpeed);
+        } else {
+          cursor.remove();
+          setTimeout(startRedact, holdAfterType);
+        }
+      }
+
+      function startRedact() {
+        // se ilumina E,V,I,N y se redacta todo lo demás, a la vez, en cascada
+        letters.forEach((letter, idx) => {
+          setTimeout(() => {
+            if (letter.dataset.keep === 'true') {
+              letter.classList.add('kept');
+            } else {
+              const block = letter.querySelector('.redact-block');
+              if (block) block.classList.add('covered');
+            }
+          }, idx * redactStagger);
+        });
+        if (onDone) setTimeout(onDone, letters.length * redactStagger + 400);
+      }
+
+      typeNext();
+    }
+
+    // el rol ahora es texto normal (sin efecto); el efecto vive solo en la bio, y se repite en bucle
+    function runBioLoop() {
+      document.getElementById('bioStencil').innerHTML = '';
+      runTypeRedact('bioStencil', 'Filmmaker, fotógrafo y creador de contenido con interés en inteligencia artificial aplicada al marketing. Mi trayectoria completa vive en el CV, la encuentras en Contacto.', () => {
+        triggerEvinAssembly(() => {
+          setTimeout(() => {
+            runBioLoop(); // vuelve a empezar sin recargar la página
+          }, 3200);
+        });
+      });
+    }
+    runBioLoop();
+
+    // ---------- las letras E,V,I,N vuelan hasta "Evin" (bajo ABSOLEM), un disparo dispersa el resto, y se ilumina ----------
+    function triggerEvinAssembly(onSettled) {
+      const keptEls = Array.from(document.querySelectorAll('.bio-stencil .letter.kept'));
+      const targetEl = document.getElementById('realNameEvin');
+      if (!keptEls.length || !targetEl) { if (onSettled) onSettled(); return; }
+
+      const targetRect = targetEl.getBoundingClientRect();
+      const targetX = targetRect.left + targetRect.width / 2;
+      const targetY = targetRect.top + targetRect.height / 2;
+
+      const flyLayer = document.createElement('div');
+      flyLayer.className = 'evin-fly-layer';
+      flyLayer.style.cssText = 'position:fixed; inset:0; z-index:150; pointer-events:none;';
+      document.querySelector('.feed[data-cam="presentacion"]').appendChild(flyLayer);
+
+      const smallFontSize = getComputedStyle(document.querySelector('.bio-line')).fontSize;
+
+      const clones = keptEls.map((original) => {
+        const rect = original.getBoundingClientRect();
+        const clone = document.createElement('span');
+        clone.textContent = original.textContent;
+        clone.style.cssText = `
+          position:fixed; left:${rect.left}px; top:${rect.top}px;
+          font-family:'JetBrains Mono',monospace; font-weight:700;
+          font-size:${smallFontSize};
+          color:#3ee06a; text-shadow:0 0 10px rgba(62,224,106,0.8);
+          transition: transform 0.9s cubic-bezier(.22,.8,.25,1), text-shadow 0.9s ease;
+        `;
+        flyLayer.appendChild(clone);
+        original.style.opacity = '0';
+        return { clone, rect };
+      });
+
+      // todas las letras E,V,I,N convergen exactamente sobre "Evin" en el nombre real
+      requestAnimationFrame(() => {
+        clones.forEach(({ clone, rect }, idx) => {
+          const dx = targetX - (rect.left + rect.width / 2);
+          const dy = targetY - (rect.top + rect.height / 2);
+          setTimeout(() => {
+            clone.style.transform = `translate(${dx}px, ${dy}px) scale(1.3)`;
+            clone.style.textShadow = '0 0 22px rgba(62,224,106,1), 0 0 46px rgba(62,224,106,0.6)';
+          }, idx * 20);
+        });
+      });
+
+      // justo antes del disparo: todo el texto original (incluidos los bloques negros) se desvanece,
+      // así no quedan "huecos" clasificados sueltos en la línea
+      const bioLine = document.querySelector('.bio-line');
+      setTimeout(() => {
+        bioLine.style.transition = 'opacity 0.45s ease';
+        bioLine.style.opacity = '0';
+      }, 820);
+
+      setTimeout(() => {
+        // destello de pantalla completa — mucho más notorio que un punto pequeño
+        const screenFlash = document.createElement('div');
+        screenFlash.style.cssText = `
+          position:fixed; inset:0;
+          background: rgba(62,224,106,0.5);
+          opacity:0;
+          transition: opacity 0.12s ease-out;
+        `;
+        flyLayer.appendChild(screenFlash);
+        requestAnimationFrame(() => { screenFlash.style.opacity = '1'; });
+        setTimeout(() => {
+          screenFlash.style.transition = 'opacity 0.5s ease-in';
+          screenFlash.style.opacity = '0';
+        }, 110);
+
+        // destello puntual justo en el lugar de impacto (sobre "Evin")
+        const flash = document.createElement('div');
+        flash.style.cssText = `
+          position:fixed; left:${targetX}px; top:${targetY}px; width:14px; height:14px;
+          background:#eaffea; border-radius:50%;
+          transform:translate(-50%,-50%) scale(1);
+          box-shadow:0 0 60px 30px rgba(62,224,106,0.95);
+          transition: transform 0.45s ease, opacity 0.45s ease;
+        `;
+        flyLayer.appendChild(flash);
+        requestAnimationFrame(() => {
+          flash.style.transform = 'translate(-50%,-50%) scale(22)';
+          flash.style.opacity = '0';
+        });
+
+        // las letras sobrantes salen disparadas en todas direcciones
+        clones.forEach(({ clone }) => {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 420 + Math.random() * 360;
+          const fx = Math.cos(angle) * dist, fy = Math.sin(angle) * dist;
+          clone.style.transition = 'transform 0.65s cubic-bezier(.3,.8,.4,1), opacity 0.6s ease';
+          clone.style.transform += ` translate(${fx}px, ${fy}px) rotate(${Math.random()*360-180}deg) scale(0.3)`;
+          clone.style.opacity = '0';
+        });
+
+        // "Evin" se ilumina justo debajo de ABSOLEM, en el lugar exacto donde estaba oculto
+        setTimeout(() => {
+          targetEl.classList.add('lit');
+
+          setTimeout(() => {
+            flyLayer.remove();
+            bioLine.style.transition = '';
+            bioLine.style.opacity = '1'; // se restaura para el próximo ciclo del bucle
+            targetEl.classList.remove('lit'); // vuelve a ocultarse para el próximo ciclo
+            if (onSettled) onSettled();
+          }, 2600);
+        }, 480);
+      }, 980);
+    }
+
+    // ---------- reloj corriendo (ambiente, no es una fecha) ----------
+    const clockEl = document.getElementById('camClock');
+    let seconds = 0;
+    setInterval(() => {
+      seconds++;
+      const h = String(Math.floor(seconds/3600)).padStart(2,'0');
+      const m = String(Math.floor((seconds%3600)/60)).padStart(2,'0');
+      const s = String(seconds%60).padStart(2,'0');
+      clockEl.textContent = `${h}:${m}:${s}`;
+    }, 1000);
+
+    // ---------- cambio de cámara con efecto de estática ----------
+    const camOrder = [
+      { key: 'presentacion', num: '01', label: 'PRESENTACIÓN' },
+      { key: 'video',        num: '02', label: 'VIDEO' },
+      { key: 'drones',       num: '03', label: 'DRONES' },
+      { key: 'fotografia',   num: '04', label: 'FOTOGRAFÍA' },
+      { key: 'contacto',     num: '05', label: 'CONTACTO' },
+    ];
+
+    const feeds = document.querySelectorAll('.feed');
+    const buttons = document.querySelectorAll('.cam-btn');
+    const staticOverlay = document.getElementById('staticOverlay');
+    const camNumber = document.getElementById('camNumber');
+    const camLabel = document.getElementById('camLabel');
+    let currentIndex = 0;
+    let switching = false;
+
+    function switchCam(index) {
+      if (switching || index === currentIndex) return;
+      switching = true;
+      const cam = camOrder[index];
+
+      const camSound = document.getElementById('camSwitchSound');
+      camSound.currentTime = 0;
+      camSound.play().catch(() => {});
+
+      staticOverlay.classList.remove('on');
+      void staticOverlay.offsetWidth; // reinicia la animación
+      staticOverlay.classList.add('on');
+
+      setTimeout(() => {
+        feeds.forEach(f => f.classList.toggle('active', f.dataset.cam === cam.key));
+        buttons.forEach(b => b.classList.toggle('selected', b.dataset.cam === cam.key));
+        camNumber.textContent = cam.num;
+        camLabel.textContent = cam.label;
+        currentIndex = index;
+      }, 140);
+
+      setTimeout(() => { switching = false; }, 340);
+    }
+
+    buttons.forEach((btn, i) => {
+      btn.addEventListener('click', () => switchCam(i));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key >= '1' && e.key <= '5') switchCam(parseInt(e.key) - 1);
+      if (e.key === 'ArrowRight') switchCam(Math.min(currentIndex + 1, camOrder.length - 1));
+      if (e.key === 'ArrowLeft') switchCam(Math.max(currentIndex - 1, 0));
+    });
+
+    // ---------- ítem "Más": despliega un mini-álbum de trabajo agrupado ----------
+    document.querySelectorAll('.more-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const panel = document.getElementById(item.getAttribute('data-more'));
+        if (panel) panel.classList.toggle('open');
+      });
+    });
+
+    // ---------- vista previa flotante al pasar el mouse ----------
+    const preview = document.getElementById('preview');
+    const previewImg = document.getElementById('previewImg');
+    const previewVideo = document.getElementById('previewVideo');
+    const previewPending = document.getElementById('previewPending');
+
+    document.addEventListener('mousemove', (e) => {
+      let x = e.clientX + 26, y = e.clientY - 85;
+      if (x + 260 > window.innerWidth) x = e.clientX - 286;
+      if (y < 10) y = 10;
+      preview.style.left = x + 'px';
+      preview.style.top = y + 'px';
+    });
+
+    document.querySelectorAll('.work-item:not(.more-item)').forEach(item => {
+      item.addEventListener('mouseenter', () => {
+        if (item.hasAttribute('data-pending')) {
+          previewVideo.pause();
+          previewVideo.style.display = 'none';
+          previewImg.style.display = 'none';
+          previewPending.style.display = 'flex';
+          preview.classList.add('active');
+          return;
+        }
+        previewPending.style.display = 'none';
+        const type = item.getAttribute('data-type');
+        const src = item.getAttribute('data-src');
+        if (type === 'video') {
+          previewVideo.pause();
+          previewVideo.src = src;
+          previewVideo.style.display = 'block';
+          previewImg.style.display = 'none';
+          previewVideo.load();
+          const playPromise = previewVideo.play();
+          if (playPromise) playPromise.catch(err => console.warn('No se pudo reproducir la vista previa:', err));
+        } else {
+          previewImg.src = src; previewImg.style.display = 'block'; previewVideo.style.display = 'none';
+        }
+        preview.classList.add('active');
+      });
+      item.addEventListener('mouseleave', () => preview.classList.remove('active'));
+    });
+
+    // ---------- lightbox: clic para ver en tamaño y sonido originales ----------
+    const lightbox = document.getElementById('lightbox');
+    const lightboxInner = document.getElementById('lightboxInner');
+    const lightboxCaption = document.getElementById('lightboxCaption');
+    const lightboxClose = document.getElementById('lightboxClose');
+
+    function openLightbox(item) {
+      const title = item.querySelector('.work-title')?.textContent || '';
+      lightboxInner.innerHTML = '';
+      lightboxCaption.textContent = title;
+
+      if (item.hasAttribute('data-pending')) {
+        const span = document.createElement('span');
+        span.className = 'pending-label';
+        span.textContent = 'Cargando…';
+        lightboxInner.appendChild(span);
+      } else {
+        const type = item.getAttribute('data-type');
+        const src = item.getAttribute('data-src');
+        if (type === 'video') {
+          const v = document.createElement('video');
+          v.src = src;
+          v.controls = true;
+          v.autoplay = true;
+          // sin "muted": se reproduce con el audio original
+          lightboxInner.appendChild(v);
+        } else {
+          const img = document.createElement('img');
+          img.src = src;
+          lightboxInner.appendChild(img);
+        }
+      }
+      lightbox.classList.add('open');
+      preview.classList.remove('active');
+    }
+
+    function closeLightbox() {
+      lightbox.classList.remove('open');
+      const v = lightboxInner.querySelector('video');
+      if (v) v.pause();
+      lightboxInner.innerHTML = '';
+    }
+
+    document.querySelectorAll('.work-item:not(.more-item)').forEach(item => {
+      item.addEventListener('click', () => openLightbox(item));
+    });
+    lightboxClose.addEventListener('click', closeLightbox);
+    lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+  </script>
+
+</body>
+</html>
