@@ -235,6 +235,31 @@
     font-size: 0.55rem;
     letter-spacing: 0.04em;
   }
+  .more-thumb[data-type] {
+    position: relative;
+    cursor: pointer;
+    background: #0d0d0e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .more-thumb[data-type]::before {
+    content: "▶";
+    color: var(--amber);
+    font-size: 0.8rem;
+  }
+  .more-thumb[data-type] .thumb-label {
+    position: absolute;
+    left: 4px; right: 4px; bottom: 3px;
+    font-size: 0.48rem;
+    color: var(--muted);
+    line-height: 1.15;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .more-thumb[data-type]:hover { border-color: var(--amber-dim); }
 
   /* -- ítems sin material propio todavía -- */
   .work-item.pending .work-title { color: var(--muted); font-style: italic; }
@@ -412,7 +437,7 @@
     <div class="feed" data-cam="video">
       <div class="feed-title"><span class="amber">02</span> · Videos</div>
       <ul class="work-list">
-        <li class="work-item pending" data-pending="true">
+        <li class="work-item" data-type="video" data-src="media/f1511878fe3e5c549d24ae303ab8370e_1.mp4">
           <span class="work-title">Reel — Marca Local</span><span class="work-meta">Comercial</span>
         </li>
         <li class="work-item pending" data-pending="true">
@@ -426,10 +451,17 @@
         </li>
       </ul>
       <div class="more-panel" id="more-video">
-        <div class="more-thumb pending">Cargando…</div>
-        <div class="more-thumb pending">Cargando…</div>
-        <div class="more-thumb pending">Cargando…</div>
-        <div class="more-thumb pending">Cargando…</div>
+        <div class="more-thumb" data-type="video" data-title="Proyecto libre 1" data-src="media/5bb9632e231b5cd089e39010469f7eed_1.mp4"><span class="thumb-label">Proyecto libre 1</span></div>
+        <div class="more-thumb" data-type="video" data-title="Proyecto libre 2" data-src="media/50fca679679fe5fa18689b67a2ea389d_1.mp4"><span class="thumb-label">Proyecto libre 2</span></div>
+        <div class="more-thumb" data-type="video" data-title="Proyecto libre 3" data-src="media/715d97fda30ef03cd461ce0a92429269_1.mp4"><span class="thumb-label">Proyecto libre 3</span></div>
+        <div class="more-thumb" data-type="video" data-title="Proyecto libre 4" data-src="media/8b63ea7d9f5600495f1172d097ec1483_1.mp4"><span class="thumb-label">Proyecto libre 4</span></div>
+        <div class="more-thumb" data-type="video" data-title="Proyecto libre 5" data-src="media/c2e5de1be851416b0ff7833cb4e26f09_1.mp4"><span class="thumb-label">Proyecto libre 5</span></div>
+        <div class="more-thumb" data-type="video" data-title="Proyecto libre 6" data-src="media/e5545df7a97d4065a1b55f32c474145f_1.mp4"><span class="thumb-label">Proyecto libre 6</span></div>
+        <div class="more-thumb" data-type="video" data-title="Proyecto libre 7" data-src="media/1b575f33076271b31847a31ac258df80_1.mp4"><span class="thumb-label">Proyecto libre 7</span></div>
+        <div class="more-thumb" data-type="video" data-title="Arca x Valeria" data-src="media/Arca_X_Valeria_s.mp4"><span class="thumb-label">Arca x Valeria</span></div>
+        <div class="more-thumb" data-type="video" data-title="Arca — Álamos" data-src="media/ARCA-VID-ALAMOS.mp4"><span class="thumb-label">Arca — Álamos</span></div>
+        <div class="more-thumb" data-type="video" data-title="Arca — Video 1" data-src="media/ARCA-VID1.mp4"><span class="thumb-label">Arca — Video 1</span></div>
+        <div class="more-thumb" data-type="video" data-title="Arca — Video 2" data-src="media/ARCA-VID2.mp4"><span class="thumb-label">Arca — Video 2</span></div>
       </div>
     </div>
 
@@ -852,7 +884,7 @@
       preview.style.top = y + 'px';
     });
 
-    document.querySelectorAll('.work-item:not(.more-item)').forEach(item => {
+    document.querySelectorAll('.work-item:not(.more-item), .more-thumb[data-type]').forEach(item => {
       item.addEventListener('mouseenter', () => {
         if (item.hasAttribute('data-pending')) {
           previewVideo.pause();
@@ -888,7 +920,7 @@
     const lightboxClose = document.getElementById('lightboxClose');
 
     function openLightbox(item) {
-      const title = item.querySelector('.work-title')?.textContent || '';
+      const title = item.querySelector('.work-title')?.textContent || item.getAttribute('data-title') || '';
       lightboxInner.innerHTML = '';
       lightboxCaption.textContent = title;
 
@@ -924,7 +956,7 @@
       lightboxInner.innerHTML = '';
     }
 
-    document.querySelectorAll('.work-item:not(.more-item)').forEach(item => {
+    document.querySelectorAll('.work-item:not(.more-item), .more-thumb[data-type]').forEach(item => {
       item.addEventListener('click', () => openLightbox(item));
     });
     lightboxClose.addEventListener('click', closeLightbox);
